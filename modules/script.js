@@ -1,167 +1,120 @@
 /**
- * modules/script.js
- *
- * Generates short-form ad scripts in Iraqi Arabic dialect using GPT-4o.
- * Each script: hook → problem → solution → CTA → subtitle cues.
+ * modules/script.js — Groq version (free)
  */
 
-import OpenAI from 'openai';
 import { logger } from './logger.js';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const GROQ_MODEL   = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
-// ── Brand Context injected into every prompt ──────────────────────────────────
 const BRAND_CONTEXT = `
 أنت كاتب إعلانات محترف متخصص في المحتوى العراقي على السوشيال ميديا.
 تكتب إعلانات لشركة IQRHQ — الشركة الرائدة في إدارة وتطوير المطاعم في العراق.
-
-معلومات أساسية عن IQRHQ:
-- الاسم: IQ = العراق، RHQ = Restaurant Headquarters
-- الرسالة الرئيسية: "مطعمك يستحق نظاماً يشتغل بدونك كل ثانية"
-- الخدمات: تشخيص المطاعم، بناء الأنظمة (SOPs)، تدريب الفريق، لوحة KPI، تحسين تجربة الزبون، افتتاح مطاعم جديدة
-- التشخيص الأول: مجاني تماماً
-- البريد: info@iqrhq.me
-- الجمهور: أصحاب المطاعم في العراق — من بغداد وكل المحافظات
-- الأسلوب: واقعي، مباشر، بالعراقي الصريح — مو لغة رسمية ومو تقارير
-
-قواعد الكتابة:
-- اللهجة: عراقية شعبية ١٠٠٪ (گ = ك، ڤ = ف، چ = ج)
-- الأسلوب: سريع، مثير، يضرب على الوجع
-- الهوك: أول ٣ ثواني لازم تخلي الواحد يوقف السكرول
-- المدة الكلية: ١٥–٢٠ ثانية نص مقروء بصوت عالي
-- ما تذكر أرقام ربح أو نسب مئوية محددة — بس وصف عاطفي وواقعي
+الرسالة: "مطعمك يستحق نظاماً يشتغل بدونك كل ثانية"
+الخدمات: تشخيص مجاني، بناء الأنظمة SOPs، تدريب الفريق، لوحة KPI
+البريد: info@iqrhq.me — الجمهور: أصحاب المطاعم في العراق
+اللهجة: عراقية شعبية ١٠٠٪ (گ ڤ چ) — سريع، مثير، يضرب على الوجع
+المدة: ١٥–٢٠ ثانية — ما تذكر أرقام مالية محددة
 `.trim();
 
-// ── Hook Templates (randomized per generation) ────────────────────────────────
 const HOOK_TEMPLATES = [
   'ليش مطعمك يخسر وانت ما تدري؟',
   'كل يوم تفتح المطعم وكل يوم نفس المشكلة؟',
-  'صاحب المطعم اللي ما عنده نظام — يشتغل مجاناً!',
-  'لو مطعمك يمشي بيك انت شخصياً — المشكلة مو الموظفين',
-  'الهدر اللي داخل مطبخك يأكل أرباحك كل يوم',
-  'متى آخر مرة طلعت من مطعمك بدون صداع؟',
   'مطعم بدون نظام = ماكينة تحرق فلوس',
-  'شلون مطاعم ثانية تربح وانت تخسر؟',
+  'متى آخر مرة طلعت من مطعمك بدون صداع؟',
+  'الهدر اللي داخل مطبخك يأكل أرباحك كل يوم',
 ];
 
-/**
- * Generate a complete ad script for a given topic.
- * @param {string} topic      - Arabic topic string
- * @param {number} variation  - 1=emotional pain, 2=financial loss, 3=solution/hope
- * @returns {object} ScriptObject
- */
+async function groqChat(messages, temperature = 0.85) {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('GROQ_API_KEY is not set');
+
+  const res = await fetch(GROQ_API_URL, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: GROQ_MODEL,
+      messages,
+      temperature,
+      max_tokens: 1000,
+      response_format: { type: 'json_object' },
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Groq API error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  return data.choices[0].message.content;
+}
+
 export async function generateScript(topic, variation = 1) {
   logger.info(`Generating script for: "${topic}" (variation ${variation})`);
 
-  const variationHints = {
-    1: 'زاوية: الألم العاطفي لصاحب المطعم — التعب والإرهاق',
-    2: 'زاوية: الخسارة المالية والهدر — الفلوس اللي تمشي بدون ما تحس',
-    3: 'زاوية: الحل والأمل — كيف IQRHQ يغير الوضع',
+  const hints = {
+    1: 'زاوية: الألم العاطفي — التعب والإرهاق',
+    2: 'زاوية: الخسارة المالية والهدر',
+    3: 'زاوية: الحل والأمل مع IQRHQ',
   };
 
-  const hint = variationHints[variation] || variationHints[1];
   const hook = HOOK_TEMPLATES[Math.floor(Math.random() * HOOK_TEMPLATES.length)];
 
-  const prompt = `
-${BRAND_CONTEXT}
+  const prompt = `${BRAND_CONTEXT}
 
-الموضوع المطلوب: "${topic}"
-الزاوية: ${hint}
-الهوك المقترح (يمكن تعديله): "${hook}"
+الموضوع: "${topic}"
+${hints[variation] || hints[1]}
+الهوك المقترح: "${hook}"
 
-اكتب سكريبت إعلان فيديو قصير بالعراقي لـ IQRHQ.
-
-المطلوب بالضبط — رد بـ JSON فقط بهذا الشكل:
+رد بـ JSON فقط بدون أي نص خارجه:
 {
-  "hook": "جملة واحدة تستمر ٣ ثواني — توقف السكرول",
-  "problem": "توصيف المشكلة بجملتين — يحسس الواحد إنهم يعرفونه",
-  "bridge": "جملة انتقال لـ IQRHQ — طبيعية مو إعلانية",
-  "solution": "شو يسوي IQRHQ — جملتين بالأكثر، واضحة وعملية",
-  "cta": "دعوة للتصرف — جملة واحدة قوية",
-  "fullText": "النص الكامل مرتب للتسجيل الصوتي — فقرة واحدة متصلة",
-  "subtitleLines": [
-    "سطر ١ — كلمات قليلة تظهر مع الصوت",
-    "سطر ٢",
-    "سطر ٣",
-    "سطر ٤",
-    "سطر ٥"
-  ],
+  "hook": "جملة واحدة ٣ ثواني توقف السكرول",
+  "problem": "جملتين عن المشكلة",
+  "bridge": "جملة انتقال لـ IQRHQ",
+  "solution": "جملتين عن الحل",
+  "cta": "جملة واحدة CTA",
+  "fullText": "النص الكامل للتسجيل الصوتي متصل",
+  "subtitleLines": ["سطر ١", "سطر ٢", "سطر ٣", "سطر ٤", "سطر ٥"],
   "estimatedDurationSeconds": 18,
-  "emotionalTone": "frustrated|urgent|hopeful|empowering"
-}
+  "emotionalTone": "frustrated"
+}`;
 
-تأكد:
-- fullText مكتوب كأنك تحچي — مو كأنك تكتب مقال
-- subtitleLines: كل سطر ٢–٥ كلمات بالأكثر
-- مجموع النص الكامل يُقرأ خلال ١٥–٢٢ ثانية
-- ما تذكر أرقام مالية محددة أو نسب
-- لا تكتب أي شيء خارج الـ JSON
-`.trim();
+  const raw = await groqChat([{ role: 'user', content: prompt }]);
+  const clean = raw.replace(/```json|```/g, '').trim();
 
-  const response = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.85,
-    max_tokens: 800,
-  });
-
-  const raw = response.choices[0].message.content;
   let script;
   try {
-    script = JSON.parse(raw);
+    script = JSON.parse(clean);
   } catch {
-    throw new Error(`Script JSON parse failed: ${raw.slice(0, 200)}`);
+    throw new Error(`JSON parse failed: ${raw.slice(0, 200)}`);
   }
 
-  // Validate required fields
-  const required = ['hook', 'problem', 'solution', 'cta', 'fullText', 'subtitleLines'];
-  for (const field of required) {
-    if (!script[field]) throw new Error(`Script missing field: ${field}`);
+  for (const f of ['hook','problem','solution','cta','fullText','subtitleLines']) {
+    if (!script[f]) throw new Error(`Missing field: ${f}`);
   }
 
-  // Ensure subtitleLines is array
   if (!Array.isArray(script.subtitleLines)) {
-    script.subtitleLines = script.fullText
-      .split('—')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    script.subtitleLines = script.fullText.split('—').map(s => s.trim()).filter(Boolean);
   }
 
-  script.topic     = topic;
+  script.topic = topic;
   script.variation = variation;
   script.generatedAt = new Date().toISOString();
 
-  logger.info(`Script ready. Estimated duration: ${script.estimatedDurationSeconds}s`);
+  logger.info(`Script ready ~${script.estimatedDurationSeconds}s`);
   return script;
 }
 
-/**
- * Generate 5 hook variations for A/B testing.
- * @param {string} topic
- * @returns {string[]}
- */
 export async function generateHooks(topic) {
-  const prompt = `
-${BRAND_CONTEXT}
-
+  const prompt = `${BRAND_CONTEXT}
 الموضوع: "${topic}"
+اكتب ٥ هوكات عراقية قصيرة. رد بـ JSON فقط: { "hooks": ["١","٢","٣","٤","٥"] }`;
 
-اكتب ٥ هوكات مختلفة بالعراقي لفيديو إعلاني قصير — كل هوك جملة واحدة ٢–٤ ثواني.
-الهوك لازم يوقف السكرول ويحچي بالوجع مباشرةً.
-
-رد بـ JSON فقط:
-{ "hooks": ["هوك ١", "هوك ٢", "هوك ٣", "هوك ٤", "هوك ٥"] }
-`.trim();
-
-  const res = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o',
-    messages: [{ role: 'user', content: prompt }],
-    response_format: { type: 'json_object' },
-    temperature: 0.9,
-    max_tokens: 300,
-  });
-
-  const { hooks } = JSON.parse(res.choices[0].message.content);
+  const raw = await groqChat([{ role: 'user', content: prompt }], 0.9);
+  const { hooks } = JSON.parse(raw.replace(/```json|```/g, '').trim());
   return hooks;
 }
