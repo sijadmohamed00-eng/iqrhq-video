@@ -1,0 +1,91 @@
+name: 🎬 Generate IQRHQ Video
+
+on:
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: 'موضوع الإعلان بالعربي'
+        required: true
+        default: 'مطعم يخسر فلوس بسبب الهدر'
+        type: string
+      variation:
+        description: 'نوع الزاوية'
+        required: true
+        default: '1'
+        type: choice
+        options:
+          - '1'
+          - '2'
+          - '3'
+      add_music:
+        description: 'أضف موسيقى خلفية'
+        required: false
+        default: 'true'
+        type: boolean
+
+jobs:
+  generate-video:
+    name: Generate Video — "${{ github.event.inputs.topic }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: 🎞️ Install FFmpeg
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg fonts-noto-color-emoji
+          sudo apt-get install -y fonts-cairo || sudo apt-get install -y fonts-arabeyes || true
+          ffmpeg -version
+
+      - name: 📦 Install npm packages
+        run: npm ci
+
+      - name: 📁 Create directories
+        run: |
+          mkdir -p output temp requests
+          [ -f requests/pending.json ] || echo "[]" > requests/pending.json
+
+      - name: 🎬 Generate Video
+        id: generate
+        env:
+          OPENAI_API_KEY:            ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_MODEL:              gpt-4o
+          ELEVENLABS_API_KEY:        ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_VOICE_ID:       ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_VOICE_ARABIC:   ${{ secrets.ELEVENLABS_VOICE_ID }}
+          ELEVENLABS_VOICE_ARABIC_F: ${{ secrets.ELEVENLABS_VOICE_ARABIC_F }}
+          TOPIC:                     ${{ github.event.inputs.topic }}
+          VARIATION:                 ${{ github.event.inputs.variation }}
+          ADD_MUSIC:                 ${{ github.event.inputs.add_music }}
+          LOG_LEVEL:                 info
+        run: node scripts/generate.js
+
+      - name: 📤 Upload Video Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iqrhq-video-${{ steps.generate.outputs.job_id }}
+          path: |
+            output/*.mp4
+            output/*.mp3
+            output/*_script.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: 📊 Job Summary
+        if: always()
+        run: |
+          echo "## 🎬 IQRHQ Video Generation" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Topic | ${{ github.event.inputs.topic }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Job ID | ${{ steps.generate.outputs.job_id }} |" >> $GITHUB_STEP_SUMMARY
+          ls -lah output/ 2>/dev/null || echo "No output files found"
