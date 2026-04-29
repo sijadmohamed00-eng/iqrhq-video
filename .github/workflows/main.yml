@@ -1,0 +1,6 @@
+git init
+git add .
+git commit -m "initial commit: IQRHQ video system via GitHub Actions"
+git remote add origin https://github.com/USERNAME/iqrhq-video-system.git
+git branch -M main
+git push -u origin main
