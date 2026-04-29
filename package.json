@@ -1,0 +1,17 @@
+{
+  "name": "iqrhq-video-system",
+  "version": "2.0.0",
+  "description": "AI-powered short-form video generator for IQRHQ — runs via GitHub Actions",
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate.js",
+    "setup": "node scripts/setup.js"
+  },
+  "dependencies": {
+    "openai": "^4.47.1",
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
