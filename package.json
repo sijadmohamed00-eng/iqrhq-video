@@ -1,0 +1,15 @@
+{
+  "name": "iqrhq-video-system",
+  "version": "3.0.0",
+  "description": "IQRHQ AI video generator — GitHub Actions",
+  "type": "module",
+  "scripts": {
+    "generate": "node scripts/generate.js"
+  },
+  "dependencies": {
+    "uuid": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
